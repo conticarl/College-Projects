@@ -1,0 +1,121 @@
+---
+title: "Original Housing Code"
+author: "Carl Conti"
+date: "3/10/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+library(MASS)
+RealEstate <- read.table("APPENC07.txt")
+names(RealEstate) <- c("IDNumber", "SalesPrice", "SqFeet", "Bedrooms", "Bathrooms", "AC", "GarageSize", "Pool", "YearBuilt", "Quality", "Style", "LotSize", "Highway")
+set.seed(123)
+n <- nrow(RealEstate)
+obs <- sample(1:n, size = 300)
+REtest <- RealEstate[obs, ]
+REextra <- RealEstate[-obs, ]
+fit1 <- lm(formula = SalesPrice ~ SqFeet + Bedrooms + Bathrooms + AC + GarageSize + Pool + YearBuilt + factor(Quality) + factor(Style) + LotSize + Highway, data = REtest)
+plot(fit1)
+pairs(~ SalesPrice + SqFeet + Bedrooms + Bathrooms + GarageSize + YearBuilt + LotSize, data = REtest, main = "Quantitative Variable Scatter Matrix")
+par(mfrow = c(2, 2))
+plot(fit1)
+boxcox <- boxcox(fit1)
+lambda <- boxcox$x[which.max(boxcox$y)]
+REtest$PriceT <- - REtest$SalesPrice^lambda
+fit2 <- lm(PriceT ~ SqFeet + Bedrooms + Bathrooms + AC + GarageSize + Pool + YearBuilt + factor(Quality) + factor(Style) + LotSize + Highway, data = REtest)
+plot(fit2)
+pairs(~ PriceT + SqFeet + Bedrooms + Bathrooms + GarageSize + YearBuilt + LotSize, data = REtest)
+par(mfrow = c(2, 3))
+boxplot(PriceT ~ AC, data = REtest, main = "Transformed Price vs. AC", xlab = "AC", ylab = "Transformed Price")
+boxplot(PriceT ~ Pool, data = REtest, main = "Transformed Price vs. Pool" , xlab = "Pool", ylab = "Transformed Price")
+boxplot(PriceT ~ Quality, data = REtest, main = "Transformed Price vs. Quality", xlab = "Quality", ylab = "Transformed Price")
+boxplot(PriceT ~ Style, data = REtest, main = "Transformed Price vs. Style", xlab = "Style", ylab = "Transformed Price")
+boxplot(PriceT ~ Highway, data = REtest, main = "Transformed Price vs. Highway", xlab = "Highway", ylab = "Transformed Price")
+library(car)
+avPlots(fit2, terms =~. -AC - Pool - factor(Quality) - factor(Style) - Highway- Price - IDNumber)
+fit3 <- lm(PriceT ~ SqFeet + Bedrooms + AC + GarageSize + Pool + YearBuilt + factor(Quality) + factor(Style), data = REtest) 
+library(leaps) 
+attach(REtest) 
+leaps <- regsubsets(PriceT ~ SqFeet + Bedrooms + AC + GarageSize + Pool + YearBuilt + Quality + Style, data = REtest, nbest = 1, method = "backward", intercept = TRUE, nvmax = 8)
+summary(leaps)
+library(car)
+par(mfrow = c(1, 1))
+subsets(leaps, statistic = "adjr2", legend = FALSE, cex.subsets = 0.4, xlim = c(1, 9))
+subsets(leaps, statistic = "bic", legend = FALSE, cex.subsets = 0.4, xlim = c(1, 9))
+subsets(leaps, statistic = "cp", legend = FALSE, cex.subsets = 0.4, xlim = c(1, 9))
+par(mfrow = c(1,2))
+plot(leaps, scale = "adjr2")
+plot(leaps, type = 'b')
+plot(leaps, scale = 'Cp')
+par(mfrow = c(1, 2))
+fit4 <- lm(PriceT ~ SqFeet + Bedrooms + AC + GarageSize + Pool + YearBuilt + Quality + Style, data = REtest)
+step(fit4, data = REtest, scope =fit2, direction = "both", test = "F")
+fit5 <- lm(PriceT ~ SqFeet + Bedrooms + GarageSize + YearBuilt + Quality + Style, data = REtest)
+fit6 <- lm(PriceT ~ SqFeet + GarageSize + YearBuilt + Quality + Style, data = REtest)
+plot(fit5)
+plot(fit6)
+par(mfrow = c(1, 2))
+yhat5 <- fitted(fit5)
+mse5_1 <- summary(fit5)$sigma^2
+h5 <- hatvalues(fit5)
+res5_1 <- residuals(fit5)
+res5_2 <- res5_1 / sqrt(mse5_1)
+mse5_2 <- ( (294) * mse5_1 - (res5_1^2)/(1-h5) ) / (293) 
+res5_3 <- res5_1 / sqrt(mse5_2 * (1-h5))
+plot(fitted.values(fit5), res5_3)
+abline(a = 0, b = 0, col = "red")
+plot(fitted.values(fit5), res5_2)
+abline(a = 0, b = 0, col = "red")
+yhat6 <- fitted(fit6)
+mse6_1 <- summary(fit6)$sigma^2
+h6 <- hatvalues(fit6)
+res6_1 <- residuals(fit6)
+res6_2 <- res6_1 / sqrt(mse6_1)
+mse6_2 <- ( (295)*mse6_1 - (res6_1^2)/(1-h6) ) / (294) 
+res6_3 <- res6_1 / sqrt(mse6_2*(1-h6))
+plot(fitted.values(fit6), res6_3) 
+abline(a = 0, b = 0, col = "red") 
+plot(fitted.values(fit6), res6_2) 
+abline(a = 0, b = 0, col = "red") 
+summary(fit5)
+summary(fit6)
+plot(REtest$IDNumber, cooks.distance(fit5)) 
+abline(h = 1 - qf(0.5, 6, 294), col = "red")
+text(x = 1:length(cooks.distance(fit5)) + 1, y = cooks.distance(fit5), labels = ifelse(cooks.distance(fit5) > 1 - qf(0.5, 6, 294), names(cooks.distance(fit5)),""), col = "blue")
+plot(REtest$IDNumber, cooks.distance(fit6))
+abline(h = 1 - qf(0.5, 5, 295), col = "red")
+text(x = 1:length(cooks.distance(fit6)) + 1, y = cooks.distance(fit6), labels = ifelse(cooks.distance(fit6) > 1 - qf(0.5, 5, 295), names(cooks.distance(fit6)),""), col = "blue")
+REtest <- REtest[-81,]
+REtest <- REtest[-96,]
+fit7 <- lm(PriceT ~ SqFeet + Bedrooms + GarageSize + YearBuilt + Quality + Style, data = REtest)
+fit8<- lm(PriceT ~ SqFeet + GarageSize + YearBuilt + Quality + Style, data =
+REtest)
+pred1 <- predict(fit5, newdata = REextra, interval = "prediction") 
+mspe1 <- sum( (PriceT - pred1)^2 ) / 294
+anova(fit5)
+pred2 <- predict(fit6, newdata = REextra, interval = "prediction") 
+mspe2 <- sum( (PriceT - pred2)^2 ) / 295
+anova(fit6)
+REextra$PriceTe <- - REextra$SalesPrice^lambda
+fit9 <- lm(PriceTe ~ SqFeet + Bedrooms + GarageSize + YearBuilt + Quality + Style, data = REextra)
+fit10 <- lm(PriceTe ~ SqFeet + GarageSize + YearBuilt + Quality + Style, data = REextra)
+confint(fit5)
+summary(fit5)
+anova(fit5)
+confint(fit6)
+summary(fit6)
+anova(fit6)
+confint(fit9)
+summary(fit9)
+anova(fit9)
+confint(fit10)
+summary(fit10)
+anova(fit10)
+RealEstate <- RealEstate[-81,]
+RealEstate <- RealEstate[-96,]
+RealEstate$PriceTall <- - RealEstate$SalesPrice^lambda
+fit11 <- lm(PriceTall ~ SqFeet + GarageSize + YearBuilt + Quality + Style, data = RealEstate)
+summary(fit11)

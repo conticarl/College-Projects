@@ -1,0 +1,184 @@
+---
+title: "Capstone Code"
+author: "Carl Conti"
+date: "3/10/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r} 
+## Setting Working Directory
+setwd("/Users/carlconti/Downloads")
+
+library(MASS)
+library(vctrs)
+library(readxl)
+library(car)
+library(leaps)
+```
+
+```{r}
+# Establishing two halves of data
+file1 <- read_xlsx("/Users/carlconti/Downloads/capstone data.xlsx", sheet = "1-28")
+file2 <- read_xlsx("/Users/carlconti/Downloads/capstone data.xlsx", sheet = "29-56")
+names <- c("State", "HousingType", "LotSize", "AgriSales", "Tub/Shower", "Bedrooms", "Electricity", "Fuel", "Gas", "HeatingType", "Rooms", "Value", "Vehicles", "Water", "YearBuilt", "KitchenApps", "YearsLivedIn", "Plumbing", "Taxes")
+
+## combining datasets (exluding NA's and non-HousingTypes #1's)
+all_data <- rbind(file1, file2)
+all_data <- all_data[complete.cases(all_data), ]
+names(all_data) <- names
+all_data <- subset(all_data, HousingType  == 1)
+
+## test data
+n <- nrow(all_data)
+obs <- sample(1:n, size=2000)
+test_data <- all_data[obs, ]
+extra_data <- all_data[-obs, ]
+
+#quantitative variables
+quant_keeps <- c("Bedrooms", "Electricity", "Fuel", "Gas", "Rooms", "Value", "Vehicles", "Water", "YearsLivedIn", "Taxes")
+quant <- test_data[quant_keeps]
+
+## qualitative variables
+qual_keeps <- c("LotSize", "AgriSales", "HeatingType", "YearBuilt", "Value", "KitchenApps", "Plumbing")
+qual <- test_data[qual_keeps]
+```
+
+```{r}
+## FIT 1
+
+## linear fit of all factors
+full_fit <- lm(formula = Value ~ factor(LotSize) + factor(YearBuilt) + factor(AgriSales) + factor(Plumbing) + factor(HeatingType) + factor(YearsLivedIn) + Bedrooms + Electricity + Fuel + Gas + Rooms + Vehicles + Water + KitchenApps + Taxes, data = test_data)
+
+## scatterplot matric of all factors
+pairs(~ Value + Bedrooms + Electricity + Fuel + Gas + Rooms + Vehicles + Water + Taxes, data = test_data, main = "Quantitative Variable Scatter Matrix") 
+
+## residual plots
+par(mfrow = c(2, 2))
+plot(full_fit)
+```
+
+```{r}
+## FIT 2 (boxcox)
+
+## boxcox transformation
+boxcox <- boxcox(full_fit)
+lambda <- boxcox$x[which.max(boxcox$y)]
+
+## applying lambda
+test_data$ValueT <- - test_data$Value^lambda
+
+## transformed fit
+bc_fit <- lm(formula = ValueT ~ factor(LotSize) + factor(YearBuilt) + factor(AgriSales) + factor(Plumbing) + factor(HeatingType) + factor(YearsLivedIn) + Bedrooms + Electricity + Fuel + Gas + Rooms + Vehicles + Water + KitchenApps + Taxes, data = test_data)
+
+## plot fit
+par(mfrow = c(2, 2))
+plot(bc_fit)
+```
+
+```{r}
+## FIT 3 (removing variables)
+
+## scatterplot matrix of quantitative variables
+pairs(~ ValueT + Bedrooms + Electricity + Fuel + Gas + Rooms + Vehicles + Water + Taxes, data = test_data, main = "Quantitative Variable Scatter Matrix")
+
+## added-variable plots to fuels costs and vehicles
+par(mfrow = c(2, 3))
+avPlots(lm(ValueT~Electricity+Fuel+Gas+Vehicles+Water,data=test_data))
+
+## boxplot on all qualitative varibles
+par(mfrow = c(2, 3))
+boxplot(ValueT ~ LotSize, data = test_data, main = "Transformed Value vs. Lot Size", xlab = "Lot Size", ylab = "Transformed Value")
+boxplot(ValueT ~ YearBuilt, data = test_data, main = "Transformed Value vs. Year Built", xlab = "Year Built", ylab = "Transformed Value")
+boxplot(ValueT ~ AgriSales, data = test_data, main = "Transformed Value vs. Agricultural Sales", xlab = "Agricultural Sales", ylab = "Transformed Value")
+boxplot(ValueT ~ Plumbing, data = test_data, main = "Transformed Value vs. Plumbing", xlab = "Plumbing", ylab = "Transformed Value")
+boxplot(ValueT ~ HeatingType, data = test_data, main = "Transformed Value vs. Heating Type", xlab = "Heating Type", ylab = "Transformed Value")
+boxplot(ValueT ~ YearsLivedIn, data = test_data, main = "Transformed Value vs. Years Lived In", xlab = "Years Lived In", ylab = "Transformed Value")
+
+rv_fit <- lm(ValueT ~ factor(AgriSales) + factor(YearBuilt) + factor(YearsLivedIn) + Bedrooms + Electricity + Gas + Rooms + Water + Taxes)
+```
+
+```{r}
+## FIT 4 (explanatory variables)
+
+## best subset of remaining varibles
+attach(test_data)
+leaps <- regsubsets(ValueT ~ Bedrooms + Electricity + Gas + Rooms + Water + Taxes + AgriSales + YearBuilt + YearsLivedIn, data = test_data, nbest = 1, method = "backward", intercept = TRUE, nvmax = 8)
+summary(leaps)
+
+par(mfrow = c(1, 1))
+subsets(leaps, statistic = "adjr2", legend = FALSE, cex.subsets = 0.4, xlim = c(1, 9))
+subsets(leaps, statistic = "bic", legend = FALSE, cex.subsets = 0.4, xlim = c(1, 9))
+subsets(leaps, statistic = "cp", legend = FALSE, cex.subsets = 0.4, xlim = c(1, 9))
+
+par(mfrow = c(1,2))
+plot(leaps, scale = "adjr2")
+plot(leaps, type = 'b')
+plot(leaps, scale = 'Cp')
+
+step_fit <- lm(ValueT ~ Bedrooms + Electricity + Gas + Rooms + Water + Taxes + AgriSales + YearBuilt + YearsLivedIn, data = test_data)
+step(step_fit, data = test_data, scope = bc_fit, direction = "both", test = "F")
+
+## two final models
+par(mfrow = c(2,2))
+md_fit_1 <- lm(ValueT ~ Electricity + Gas + Rooms + Taxes + factor(AgriSales) + factor(YearBuilt), data = test_data)
+md_fit_2 <- lm(ValueT ~ Electricity + Gas + Rooms + Taxes + factor(AgriSales), data = test_data)
+```
+
+```{r}
+## MODEL DIAGNOSTICS
+
+## residual plots for fit 1
+par(mfrow = c(1, 2))
+yhat_1 <- fitted(md_fit_1)
+mse1_1 <- summary(md_fit_1)$sigma^2
+h_1 <- hatvalues(md_fit_1)
+res1_1 <- residuals(md_fit_1)
+res1_2 <- res1_1 / sqrt(mse1_1)
+mse1_2 <- ( (294) * mse1_1 - (res1_1^2)/(1-h_1) ) / (293) 
+res1_3 <- res1_1 / sqrt(mse1_2 * (1-h_1)) 
+plot(fitted.values(md_fit_1), res1_3)     
+abline(a = 0, b = 0, col = "red")         
+plot(fitted.values(md_fit_1), res1_2)
+abline(a = 0, b = 0, col = "red")
+
+## residual plots for fit 2
+par(mfrow = c(1, 2))
+yhat_2 <- fitted(md_fit_2)
+mse2_1 <- summary(md_fit_2)$sigma^2
+h_2 <- hatvalues(md_fit_2)
+res2_1 <- residuals(md_fit_2)
+res2_2 <- res2_1 / sqrt(mse2_1)
+mse2_2 <- ( (294) * mse2_1 - (res2_1^2)/(1-h_2) ) / (293) 
+res2_3 <- res2_1 / sqrt(mse2_2 * (1-h_2)) 
+plot(fitted.values(md_fit_2), res2_3)     
+abline(a = 0, b = 0, col = "red")         
+plot(fitted.values(md_fit_2), res2_2)
+abline(a = 0, b = 0, col = "red")
+
+par(mfrow = c(1,2))
+plot(md_fit_1)
+plot(md_fit_2)
+
+sum_1 <- summary(md_fit_1)
+sum_2 <- summary(md_fit_2)
+write.table(sum_1,file = "summary of model 1.txt")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
