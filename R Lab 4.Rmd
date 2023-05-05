@@ -1,0 +1,38 @@
+---
+title: "R Lab 4"
+author: "Carl Conti"
+date: "11/15/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+GPA <- read.delim("GPA.txt")
+fit <- lm(GPA ~ ACT, data=GPA)
+fit2 <- lm(GPA ~ ACT + Major, data=GPA)
+anova(fit)
+anova(fit2)
+plot(GPA$ACT, GPA$GPA, xlab = "GPA", ylab = "ACT")
+abline(fit, col="red")
+abline(fit2, col="green")
+legend("bottomright",legend=c("Regression 1", "Regression 2"), col=c("red", "green"), lty=1, cex=0.8)
+f_star <- qf(0.95,1,118)
+f_star
+f_star_anova <- 0.6179
+f_star_anova
+```
+
+## 1. E(Y) = 3.588*ACT + 45.577 when Major = 0
+
+#E(Y) = 3.588*ACT + 0.241*GPA + 45.577 when Major = 1
+
+## 3. The declaration of a mjor is associated with an average increase of 0.241 in GPA holding ACT constant
+
+## 4. H0: B2 = 0, H1: B2 != 0.
+
+#F_star is F(0.95,1,118) = 3.921 but from the ANOVA table we see that F_star is 0.6179. From this we can fail to reject H0 because F_star < F_star from the ANOVA table and we do drop Major from the regression equation. 
+
+
